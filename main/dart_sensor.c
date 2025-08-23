@@ -73,11 +73,6 @@ void dart_sensor_init(void)
     uart_set_pin(DART_UART_PORT_NUM, DART_UART_TX_PIN, DART_UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     ESP_LOGI(TAG, "Dart sensor UART initialized");
 
-    // // 发送一次“设置气体命令格式”数据帧
-    // uint8_t set_gas_cmd[9] = {0xFF, 0x17, 0x04, 0x00, 0x00, 0x25, 0x07, 0xD0, 0x00};
-    // set_gas_cmd[8] = dart_checksum(set_gas_cmd, 9);
-    // uart_write_bytes(DART_UART_PORT_NUM, (const char*)set_gas_cmd, sizeof(set_gas_cmd));
-    // ESP_LOGI(TAG, "Sent 'set gas command format' frame: %02X %02X %02X %02X %02X %02X %02X %02X %02X", set_gas_cmd[0], set_gas_cmd[1], set_gas_cmd[2], set_gas_cmd[3], set_gas_cmd[4], set_gas_cmd[5], set_gas_cmd[6], set_gas_cmd[7], set_gas_cmd[8]);
 }
 
 // 设置数据无效
@@ -120,13 +115,14 @@ static int dart_sensor_read_raw(void)
         ESP_LOGI(TAG, "Waiting for auto data, buffer pos: %d", g_rx_buf_pos);
         
         // 在AUTO模式下，我们保留之前的数据，可能包含部分帧
-        // 如果缓冲区已经快满了，但没有找到有效帧，则清空一半缓冲区避免溢出
-        if (g_rx_buf_pos > sizeof(g_rx_buf) * 3 / 4) {
-            ESP_LOGW(TAG, "Buffer nearly full (%d bytes), discarding half", g_rx_buf_pos);
-            // 将后半部分数据移到前面，丢弃前半部分
-            int half_size = g_rx_buf_pos / 2;
-            memmove(g_rx_buf, g_rx_buf + half_size, g_rx_buf_pos - half_size);
-            g_rx_buf_pos -= half_size;
+        // 如果缓冲区已经快满了，则保留末尾至少9字节（可能的完整帧），丢弃更早的数据
+        if (g_rx_buf_pos > sizeof(g_rx_buf) - 18) { // 只留18字节的空间就需要清理
+            ESP_LOGW(TAG, "Buffer nearly full (%d bytes), preserving only recent data", g_rx_buf_pos);
+            
+            // 保留最后18字节（两个可能的完整帧），丢弃更早的数据
+            int bytes_to_keep = (g_rx_buf_pos >= 18) ? 18 : g_rx_buf_pos;
+            memmove(g_rx_buf, g_rx_buf + g_rx_buf_pos - bytes_to_keep, bytes_to_keep);
+            g_rx_buf_pos = bytes_to_keep;
             // 清空移动后的未使用部分
             memset(g_rx_buf + g_rx_buf_pos, 0, sizeof(g_rx_buf) - g_rx_buf_pos);
         }
@@ -144,7 +140,7 @@ static int dart_sensor_read_raw(void)
                                  sizeof(g_rx_buf) - g_rx_buf_pos, pdMS_TO_TICKS(10));
         if (len > 0) {
             g_rx_buf_pos += len;
-            ESP_LOGI(TAG, "Received %d bytes, now has %d bytes", len, g_rx_buf_pos);
+            ESP_LOGD(TAG, "Received %d bytes, now has %d bytes", len, g_rx_buf_pos);
         }
         
         // 在QNA模式下，如果已经接收到足够数据（至少9字节）可以提前结束
@@ -155,20 +151,28 @@ static int dart_sensor_read_raw(void)
     }
     
     int new_bytes = g_rx_buf_pos - start_pos;
+    
+    // 如果接收了很多数据但缓冲区接近已满，可能需要立即处理
+    if (new_bytes > 0 && g_rx_buf_pos > sizeof(g_rx_buf) - 9) {
+        ESP_LOGW(TAG, "Buffer nearly full after reading (%d bytes), immediate processing needed", g_rx_buf_pos);
+    }
+    
     ESP_LOGI(TAG, "Received %d new bytes, total: %d bytes", new_bytes, g_rx_buf_pos);
     
     // 打印实际接收到的原始数据（只打印新接收的部分，限制长度）
-    if (new_bytes > 0) {
-        // 减少输出长度，只输出最多12个字节，避免栈溢出
-        int bytes_to_print = (new_bytes < 12) ? new_bytes : 12;
-        ESP_LOGI(TAG, "Raw UART data: New data: %02X %02X %02X %02X %02X %02X%s",
+    if (new_bytes > 0 && start_pos < g_rx_buf_pos) {
+        // 减少输出长度，只输出最多9个字节，避免栈溢出
+        ESP_LOGI(TAG, "Raw UART data: New data: %02X %02X %02X %02X %02X %02X %02X %02X %02X %s",
                  g_rx_buf[start_pos], 
                  (start_pos+1 < g_rx_buf_pos) ? g_rx_buf[start_pos+1] : 0,
                  (start_pos+2 < g_rx_buf_pos) ? g_rx_buf[start_pos+2] : 0,
                  (start_pos+3 < g_rx_buf_pos) ? g_rx_buf[start_pos+3] : 0,
                  (start_pos+4 < g_rx_buf_pos) ? g_rx_buf[start_pos+4] : 0,
                  (start_pos+5 < g_rx_buf_pos) ? g_rx_buf[start_pos+5] : 0,
-                 (bytes_to_print > 6) ? "..." : "");
+                 (start_pos+6 < g_rx_buf_pos) ? g_rx_buf[start_pos+6] : 0,
+                 (start_pos+7 < g_rx_buf_pos) ? g_rx_buf[start_pos+7] : 0,
+                 (start_pos+8 < g_rx_buf_pos) ? g_rx_buf[start_pos+8] : 0,
+                 (new_bytes > 8) ? "..." : "");
     }
     
     return g_rx_buf_pos;  // 返回缓冲区中的总数据量
@@ -185,7 +189,7 @@ static bool dart_sensor_process_frame(const uint8_t *frame, dart_sensor_data_t *
     }
     
     // 简化日志，减少栈使用
-    ESP_LOGI(TAG, "Frame: %02X %02X %02X %02X...", frame[0], frame[1], frame[2], frame[3]);
+    ESP_LOGD(TAG, "Frame: %02X %02X %02X %02X...", frame[0], frame[1], frame[2], frame[3]);
     
     // 处理不同的帧类型
     if (g_dart_sensor_mode == DART_SENSOR_MODE_QNA) {
@@ -228,7 +232,7 @@ static bool dart_sensor_process_frame(const uint8_t *frame, dart_sensor_data_t *
             g_dart_read_count++;
             data->count = g_dart_read_count;
 
-            ESP_LOGI(TAG, "CH2O (AUTO): %.1f ug/m3, %.1f ppb, full_scale: %u", data->ch2o_ugm3, data->ch2o_ppb, full_scale);
+            ESP_LOGI(TAG, "CH2O (AUTO): %.1f ug/m3, %.1f ppb, raw_data: %u, full_scale: %u", data->ch2o_ugm3, data->ch2o_ppb, gas_value, full_scale);
             return true;
         } else if (frame[1] == 0x86) {
             // 也可能收到0x86帧，尤其是在切换模式时
@@ -268,40 +272,52 @@ static bool dart_sensor_read(dart_sensor_data_t *data)
         return false;
     }
     
-    // 查找有效数据帧
+    // 查找并处理所有有效数据帧
     uint8_t frame[9];
     bool found_frame = false;
-    int valid_frame_start = -1;  // 有效帧的起始位置
+    int last_valid_frame_end = -1;  // 最后一个有效帧的结束位置
+    int frames_processed = 0;       // 处理的帧数量
+    dart_sensor_data_t temp_data;   // 临时数据，用于存储每一帧的数据
     
-    // 循环查找帧头0xFF，支持乱序和粘包
+    // 循环查找所有帧头0xFF并处理所有有效帧
     for (int i = 0; i <= total - 9; ++i) {
         if (g_rx_buf[i] == 0xFF) {
             memcpy(frame, g_rx_buf + i, 9);
-            if (dart_sensor_process_frame(frame, data)) {
+            if (dart_sensor_process_frame(frame, &temp_data)) {
+                // 记录有效帧的结束位置
+                last_valid_frame_end = i + 9;
+                frames_processed++;
+                
+                // 将最新的有效帧数据复制到输出数据中
+                memcpy(data, &temp_data, sizeof(dart_sensor_data_t));
                 found_frame = true;
-                valid_frame_start = i;
-                break;
+                
+                // 在问答模式下，只需要处理第一个有效帧
+                if (g_dart_sensor_mode == DART_SENSOR_MODE_QNA) {
+                    break;
+                }
+                // 注意：在AUTO模式下，会继续搜索，以处理所有可能的帧
             }
         }
     }
     
-    // 处理缓冲区：如果找到了有效帧，移除该帧及之前的所有数据
-    if (found_frame && valid_frame_start >= 0) {
-        // 计算有效帧后面还剩余的数据量
-        int remaining_data = total - (valid_frame_start + 9);
+    // 处理缓冲区：如果找到了有效帧，移除所有已处理的数据
+    if (found_frame && last_valid_frame_end > 0) {
+        // 计算最后一个有效帧后面还剩余的数据量
+        int remaining_data = total - last_valid_frame_end;
         if (remaining_data > 0) {
-            // 将有效帧后面的数据移到缓冲区前面
-            memmove(g_rx_buf, g_rx_buf + valid_frame_start + 9, remaining_data);
+            // 将最后一个有效帧后面的数据移到缓冲区前面
+            memmove(g_rx_buf, g_rx_buf + last_valid_frame_end, remaining_data);
             // 更新缓冲区位置
             g_rx_buf_pos = remaining_data;
             // 清空移动后的未使用部分
             memset(g_rx_buf + g_rx_buf_pos, 0, sizeof(g_rx_buf) - g_rx_buf_pos);
-            ESP_LOGI(TAG, "Valid frame found, %d bytes remain", g_rx_buf_pos);
+            ESP_LOGI(TAG, "Processed %d frames, %d bytes remain in buffer", frames_processed, g_rx_buf_pos);
         } else {
             // 没有剩余数据，清空整个缓冲区
             g_rx_buf_pos = 0;
             memset(g_rx_buf, 0, sizeof(g_rx_buf));
-            ESP_LOGI(TAG, "Valid frame found, buffer cleared");
+            ESP_LOGI(TAG, "Processed %d frames, buffer cleared", frames_processed);
         }
     } else if (g_dart_sensor_mode == DART_SENSOR_MODE_QNA) {
         // 在问答模式下，如果没有找到有效帧，清空缓冲区准备下一次查询
@@ -339,7 +355,6 @@ static void dart_sensor_produce_task(void *pvParameters) {
         
         // 如果数据有效，则发送到队列
         if (data_valid) {
-            ESP_LOGI(TAG, "Sending valid data to queue");
             xQueueSend(dart_sensor_queue, &data, portMAX_DELAY);
             
             // 更新最后成功读取时间
@@ -354,10 +369,8 @@ static void dart_sensor_produce_task(void *pvParameters) {
         }
         
         // 等待时间根据模式调整
-        // 问答模式：每2秒查询一次
-        // 自动上传模式：传感器每秒自动上传，我们每1.5秒读取一次确保不会错过
         TickType_t delay_time = (g_dart_sensor_mode == DART_SENSOR_MODE_QNA) ? 
-                                pdMS_TO_TICKS(2000) : pdMS_TO_TICKS(1500);
+                                pdMS_TO_TICKS(1000) : pdMS_TO_TICKS(1000);
         vTaskDelay(delay_time);
     }
 }
