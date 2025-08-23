@@ -19,6 +19,7 @@
 #include "lvgl.h"
 #include "dart_sensor.h"
 #include "freertos/queue.h"
+#include "lvgl_screen_ui.h"
 
 #if CONFIG_LCD_CONTROLLER_SH1107
 #include "esp_lcd_sh1107.h"
@@ -116,14 +117,18 @@ static void example_increase_lvgl_tick(void *arg)
     lv_tick_inc(EXAMPLE_LVGL_TICK_PERIOD_MS);
 }
 
-static void example_lvgl_port_task(void *arg)
+static void lvgl_port_task(void *arg)
 {
     ESP_LOGI(TAG, "Starting LVGL task");
     uint32_t time_till_next_ms = 0;
     while (1) {
         _lock_acquire(&lvgl_api_lock);
         time_till_next_ms = lv_timer_handler();
+        // 在主循环中刷新甲醛浓度显示
+        extern float g_ch2o_mg;
+        lvgl_update_ch2o(g_ch2o_mg, 0);
         _lock_release(&lvgl_api_lock);
+        
         // in case of triggering a task watch dog time out
         time_till_next_ms = MAX(time_till_next_ms, EXAMPLE_LVGL_TASK_MIN_DELAY_MS);
         // in case of lvgl display not ready yet
@@ -231,14 +236,13 @@ void app_main(void)
     // 启动 Dart 传感器功能（队列、任务、打印）
     dart_sensor_start();
 
-
-
     ESP_LOGI(TAG, "Create LVGL task");
-    xTaskCreate(example_lvgl_port_task, "LVGL", EXAMPLE_LVGL_TASK_STACK_SIZE, NULL, EXAMPLE_LVGL_TASK_PRIORITY, NULL);
+    xTaskCreate(lvgl_port_task, "LVGL", EXAMPLE_LVGL_TASK_STACK_SIZE, NULL, EXAMPLE_LVGL_TASK_PRIORITY, NULL);
 
     ESP_LOGI(TAG, "Display LVGL Scroll Text");
     // Lock the mutex due to the LVGL APIs are not thread-safe
     _lock_acquire(&lvgl_api_lock);
-    example_lvgl_demo_ui(display);
+    lvgl_main_ui(display);
     _lock_release(&lvgl_api_lock);
+
 }
