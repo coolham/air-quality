@@ -39,3 +39,7 @@
 
 # debug information files
 *.dwo
+sdkconfig.old
+sdkconfig
+build
+managed_components
