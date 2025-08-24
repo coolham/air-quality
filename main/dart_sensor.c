@@ -37,7 +37,7 @@ typedef enum {
     DART_SENSOR_MODE_QNA  = 1  // 问答模式
 } dart_sensor_mode_t;
 
-static dart_sensor_mode_t g_dart_sensor_mode = DART_SENSOR_MODE_AUTO;
+static dart_sensor_mode_t g_dart_sensor_mode = DART_SENSOR_MODE_QNA;
 
 // 用于存储UART接收数据的静态缓冲区
 static uint8_t g_rx_buf[64] = {0};  // 增大缓冲区以容纳更多数据
@@ -145,7 +145,23 @@ static int dart_uart_receive(uint8_t *buf, int buf_size, int timeout_ms, const c
     return len;
 }
 
-// dart_uart_cmd_resp函数已移除，使用dart_uart_send和dart_uart_receive替代
+static void check_inplace_command(void){
+    // dart_cmd_switch_to_qna
+    uint8_t checksum = dart_checksum(dart_cmd_switch_to_qna, DART_FRAME_SIZE);
+    if (checksum != dart_cmd_switch_to_qna[DART_FRAME_SIZE-1]) {
+        ESP_LOGE(TAG, "dart_cmd_switch_to_qna checksum error");
+    }
+    // dart_cmd_switch_to_auto
+    checksum = dart_checksum(dart_cmd_switch_to_auto, DART_FRAME_SIZE);
+    if (checksum != dart_cmd_switch_to_auto[DART_FRAME_SIZE-1]) {
+        ESP_LOGE(TAG, "dart_cmd_switch_to_auto checksum error");
+    }
+    // dart_cmd_read_gas
+    checksum = dart_checksum(dart_cmd_read_gas, DART_FRAME_SIZE);
+    if (checksum != dart_cmd_read_gas[DART_FRAME_SIZE-1]) {
+        ESP_LOGE(TAG, "dart_cmd_read_gas checksum error");
+    }
+}
 
 
 // 初始化传感器工作模式
@@ -154,6 +170,8 @@ static void dart_sensor_init_mode(void)
     uint8_t resp_buf[32] = {0};
     int resp_len = 0;
     
+    check_inplace_command();
+
     if (g_dart_sensor_mode == DART_SENSOR_MODE_QNA) {
         // 验证校验和
         uint8_t checksum = dart_checksum(dart_cmd_switch_to_qna, DART_FRAME_SIZE);
@@ -268,7 +286,6 @@ static int dart_sensor_read_raw(void)
     // 记录当前缓冲区位置，用于计算新接收的数据长度
     int start_pos = g_rx_buf_pos;
     int continuous_empty_reads = 0;  // 连续空读取计数
-    char hex_str[64]; // 用于打印十六进制数据
     
     // 动态超时处理
     // 在问答模式下，等待时间可以短一些，因为发送命令后立即会有响应
@@ -358,13 +375,14 @@ static int dart_sensor_read_raw(void)
 // 处理接收到的数据帧
 static bool dart_sensor_process_frame(const uint8_t *frame, dart_sensor_data_t *data)
 {
-    uint8_t checksum = dart_checksum(frame, 9);
-    if (checksum != frame[8]) {
-        ESP_LOGW(TAG, "Checksum error: %02X != %02X", frame[8], checksum);
+    uint8_t checksum = dart_checksum(frame, DART_FRAME_SIZE);
+    if (checksum != frame[DART_FRAME_SIZE-1]) {
+        char hex_str[64];
+        bytes_to_hex_str(frame, DART_FRAME_SIZE, hex_str, sizeof(hex_str));
+        ESP_LOGW(TAG, "Checksum error: %02X != %02X, frame: %s", frame[DART_FRAME_SIZE-1], checksum, hex_str);
         set_data_invalid(data);
         return false;
     }
-    
     // 简化日志，减少栈使用
     ESP_LOGD(TAG, "Frame: %02X %02X %02X %02X...", frame[0], frame[1], frame[2], frame[3]);
     

@@ -71,16 +71,20 @@ WZ-S-K-HCHO-Module](https://www.dart-sensors.com/wp-content/uploads/2021/06/Oper
 说明：将数组的元素1至倒数第二个元素相加后取反+1
 */
 
-unsigned char FuncCheckSum(unsigned chart *i, unsigned char length)
+unsigned char FucCheckSum(unsigned char *i, unsigned char ln)
 {
-    unsigned char j, tempq = 0;
+    unsigned char j, tempq 0;
     i += 1;
-    for(j=0; j<(lenght-2); j++)
-    {
+    for(j=0; j<(ln-2); j++)
+    { 
         tempq += *i;
         i++;
     }
+    tempq == (~tempq) + 1;
+    return(tempq);
 }
+
+
 ```
 
 
