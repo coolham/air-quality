@@ -43,6 +43,18 @@ static dart_sensor_mode_t g_dart_sensor_mode = DART_SENSOR_MODE_QNA;
 static uint8_t g_rx_buf[64] = {0};  // 增大缓冲区以容纳更多数据
 static int g_rx_buf_pos = 0;  // 当前缓冲区位置，用于追加新数据
 
+// 气体浓度修正系数，默认4，可通过 setter 修改
+static float g_ch2o_correction_factor = 4.0f;
+
+void dart_set_ch2o_correction_factor(float factor) {
+    if (factor > 0.1f && factor < 100.0f) {
+        g_ch2o_correction_factor = factor;
+        ESP_LOGI(TAG, "CH2O correction factor set to %.3f", factor);
+    } else {
+        ESP_LOGW(TAG, "Invalid correction factor: %.3f, ignored", factor);
+    }
+}
+
 // 初始化UARET
 void sensor_uart_init(void)
 {
@@ -393,12 +405,13 @@ static bool dart_sensor_process_frame(const uint8_t *frame, dart_sensor_data_t *
             // 读取气体浓度帧 (response to 读取气体浓度)
             uint16_t ch2o_ugm3 = frame[2] * 256 + frame[3];  // ug/m3
             uint16_t ch2o_ppb  = frame[6] * 256 + frame[7];  // ppb
-            data->ch2o_ugm3 = (float)ch2o_ugm3;
-            data->ch2o_ppb  = (float)ch2o_ppb;
+            // 修正
+            data->ch2o_ugm3 = (float)ch2o_ugm3 / g_ch2o_correction_factor;
+            data->ch2o_ppb  = (float)ch2o_ppb / g_ch2o_correction_factor;
             data->timestamp = (uint32_t)(esp_timer_get_time() / 1000000ULL);
             g_dart_read_count++;
             data->count = g_dart_read_count;
-            ESP_LOGI(TAG, "CH2O (Q&A): %u ug/m3, %u ppb", ch2o_ugm3, ch2o_ppb);
+            ESP_LOGI(TAG, "CH2O (Q&A): raw=%u ug/m3, %u ppb, corrected=%.2f ug/m3, %.2f ppb, factor=%.2f", ch2o_ugm3, ch2o_ppb, data->ch2o_ugm3, data->ch2o_ppb, g_ch2o_correction_factor);
             return true;
         } else {
             ESP_LOGW(TAG, "Q&A: Unexpected frame: 0x%02X", frame[1]);
@@ -410,35 +423,31 @@ static bool dart_sensor_process_frame(const uint8_t *frame, dart_sensor_data_t *
             // 根据协议，气体浓度在位置4和5
             uint16_t gas_value = frame[4] * 256 + frame[5];  // 气体浓度
             uint16_t full_scale = frame[6] * 256 + frame[7]; // 满量程
-            
             // 单位在位置2，0x04表示ppb
             bool is_ppb = (frame[2] == 0x04);
-            
-            // 计算实际值
+            // 计算实际值并修正
             if (is_ppb) {
-                data->ch2o_ppb = (float)gas_value;
-                data->ch2o_ugm3 = data->ch2o_ppb * 1.23f; // 转换公式：1ppb约等于1.23ug/m3
+                data->ch2o_ppb = (float)gas_value / g_ch2o_correction_factor;
+                data->ch2o_ugm3 = data->ch2o_ppb * 1.23f;
             } else {
-                data->ch2o_ugm3 = (float)gas_value;
+                data->ch2o_ugm3 = (float)gas_value / g_ch2o_correction_factor;
                 data->ch2o_ppb = data->ch2o_ugm3 / 1.23f;
             }
-            
             data->timestamp = (uint32_t)(esp_timer_get_time() / 1000000ULL);
             g_dart_read_count++;
             data->count = g_dart_read_count;
-
-            ESP_LOGI(TAG, "CH2O (AUTO): %.1f ug/m3, %.1f ppb, raw_data: %u, full_scale: %u", data->ch2o_ugm3, data->ch2o_ppb, gas_value, full_scale);
+            ESP_LOGI(TAG, "CH2O (AUTO): raw=%u, corrected=%.2f ug/m3, %.2f ppb, factor=%.2f, full_scale=%u", gas_value, data->ch2o_ugm3, data->ch2o_ppb, g_ch2o_correction_factor, full_scale);
             return true;
         } else if (frame[1] == 0x86) {
             // 也可能收到0x86帧，尤其是在切换模式时
             uint16_t ch2o_ugm3 = frame[2] * 256 + frame[3];
             uint16_t ch2o_ppb  = frame[6] * 256 + frame[7];
-            data->ch2o_ugm3 = (float)ch2o_ugm3;
-            data->ch2o_ppb  = (float)ch2o_ppb;
+            data->ch2o_ugm3 = (float)ch2o_ugm3 / g_ch2o_correction_factor;
+            data->ch2o_ppb  = (float)ch2o_ppb / g_ch2o_correction_factor;
             data->timestamp = (uint32_t)(esp_timer_get_time() / 1000000ULL);
             g_dart_read_count++;
             data->count = g_dart_read_count;
-            ESP_LOGI(TAG, "CH2O (0x86/AUTO): %u ug/m3, %u ppb", ch2o_ugm3, ch2o_ppb);
+            ESP_LOGI(TAG, "CH2O (0x86/AUTO): raw=%u ug/m3, %u ppb, corrected=%.2f ug/m3, %.2f ppb, factor=%.2f", ch2o_ugm3, ch2o_ppb, data->ch2o_ugm3, data->ch2o_ppb, g_ch2o_correction_factor);
             return true;
         }
     }
@@ -619,7 +628,7 @@ static bool dart_sensor_read(dart_sensor_data_t *data)
     return found_frame;
 }
 
-static void dart_sensor_produce_task(void *pvParameters) {
+static void dart_sensor_producer_task(void *pvParameters) {
     ESP_LOGI(TAG, "Dart sensor produce task started");
     
     // 初始化传感器模式 - 发送模式切换命令
@@ -685,6 +694,6 @@ void dart_sensor_start(void)
     vTaskDelay(pdMS_TO_TICKS(2000));
 
     // 增加任务栈大小，避免栈溢出
-    xTaskCreate(dart_sensor_produce_task, "dart_sensor_produce_task", 3072, NULL, 5, NULL);
+    xTaskCreate(dart_sensor_producer_task, "dart_sensor_produce_task", 3072, NULL, 5, NULL);
     xTaskCreate(dart_sensor_consumer_task, "dart_sensor_consumer_task", 2048, NULL, 4, NULL);
 }
