@@ -16,13 +16,16 @@ Air Quality Monitoring:
 #include "esp_lcd_panel_ops.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_event.h"
 #include "nvs_flash.h"
 #include "driver/i2c_master.h"
 #include "lvgl.h"
 #include "dart_sensor.h"
+#include "winsen_sensor.h"
 #include "freertos/queue.h"
 #include "lvgl_screen_ui.h"
 #include "wifi_station.h"
+#include "protocols/mqtt_device.h"
 
 #if CONFIG_LCD_CONTROLLER_SH1107
 #include "esp_lcd_sh1107.h"
@@ -30,7 +33,7 @@ Air Quality Monitoring:
 #include "esp_lcd_panel_vendor.h"
 #endif
 
-static const char *TAG = "ui";
+static const char *TAG = "main";
 
 #define I2C_BUS_PORT  0
 
@@ -128,8 +131,10 @@ static void lvgl_port_task(void *arg)
         _lock_acquire(&lvgl_api_lock);
         time_till_next_ms = lv_timer_handler();
         // 在主循环中刷新甲醛浓度显示
-        extern float g_ch2o_mg;
-        lvgl_update_ch2o(g_ch2o_mg, 0);
+        extern float g_dart_hcho_mg;
+        extern float g_winsen_hcho_mg;
+        lvgl_update_dart_ch2o(g_dart_hcho_mg, 0);
+        lvgl_update_winsen_ch2o(g_winsen_hcho_mg, 0);
         _lock_release(&lvgl_api_lock);
         
         // in case of triggering a task watch dog time out
@@ -149,7 +154,6 @@ void app_main(void)
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-
 
     ESP_LOGI(TAG, "Initialize I2C bus");
     i2c_master_bus_handle_t i2c_bus = NULL;
@@ -259,6 +263,8 @@ void app_main(void)
 
     // 启动 Dart 传感器功能（队列、任务、打印）
     dart_sensor_start();
+    winsen_sensor_start();
+
 
     if (CONFIG_LOG_MAXIMUM_LEVEL > CONFIG_LOG_DEFAULT_LEVEL) {
         /* If you only want to open more logs in the wifi module, you need to make the max level greater than the default level,
@@ -269,5 +275,7 @@ void app_main(void)
     // init WiFi
     wifi_init_sta();
 
-
+    // xTaskCreate(mqtt_task, "mqtt_task", 4096, NULL, 5, NULL);
+    // mqtt_task();
+    
 }

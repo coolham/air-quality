@@ -1,6 +1,12 @@
 menu "Air Quality Configuration"
 
-        config ESP_WIFI_SSID
+    config BROKER_URL
+        string "Broker URL"
+        default "mqtt://127.0.0.1"
+        help
+            URL of the broker to connect to
+
+    config ESP_WIFI_SSID
         string "WiFi SSID"
         default "myssid"
         help

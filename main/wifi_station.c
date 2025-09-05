@@ -57,7 +57,7 @@ static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
-static const char *TAG = "wifi station";
+static const char *TAG = "wifi";
 
 static int s_retry_num = 0;
 
@@ -148,4 +148,5 @@ void wifi_init_sta(void)
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
+    ESP_LOGI(TAG, "wifi_init_sta finished.");
 }

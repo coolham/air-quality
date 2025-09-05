@@ -3,15 +3,10 @@
 
 #include <stdint.h>
 
-typedef struct {
-    float ch2o_ugm3;   // 甲醛浓度，单位：ug/m3
-    float ch2o_ppb;    // 甲醛浓度，单位：ppb
-    uint32_t timestamp; // 时间戳，单位：秒（可用esp_timer_get_time()/1000000）
-    uint32_t count;     // 计数
-} dart_sensor_data_t;
 
-extern float g_ch2o_mg;
-extern uint32_t g_ch2o_timestamp;
+
+extern float g_dart_hcho_mg;
+extern uint32_t g_dart_hcho_timestamp;
 
 void dart_sensor_init(void);
 void dart_sensor_start(void); // 启动传感器任务和打印任务

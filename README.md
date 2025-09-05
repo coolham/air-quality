@@ -1,6 +1,9 @@
 # air-quality
 Air Quality Monitor
 
+## 环境
+
+esp-idf v5.5
 
 ## LVGL
 
