@@ -15,12 +15,12 @@
 static const char *TAG = "screen";
 
 
-#define EXAMPLE_LVGL_TICK_PERIOD_MS    5
-#define EXAMPLE_LVGL_TASK_STACK_SIZE   (4 * 1024)
-#define EXAMPLE_LVGL_TASK_PRIORITY     2
-#define EXAMPLE_LVGL_PALETTE_SIZE      8
-#define EXAMPLE_LVGL_TASK_MAX_DELAY_MS 500
-#define EXAMPLE_LVGL_TASK_MIN_DELAY_MS 1000 / CONFIG_FREERTOS_HZ
+#define AIR_LVGL_TICK_PERIOD_MS    5
+#define AIR_LVGL_TASK_STACK_SIZE   (4 * 1024)
+#define AIR_LVGL_TASK_PRIORITY     2
+#define AIR_LVGL_PALETTE_SIZE      8
+#define AIR_LVGL_TASK_MAX_DELAY_MS 500
+#define AIR_LVGL_TASK_MIN_DELAY_MS 1000 / CONFIG_FREERTOS_HZ
 
 
 
@@ -28,34 +28,33 @@ static lv_obj_t *dart_hcho_label = NULL;
 static lv_obj_t *winsen_hcho_label = NULL;
 
 // To use LV_COLOR_FORMAT_I1, we need an extra buffer to hold the converted data
-static uint8_t oled_buffer[EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES / 8];
+static uint8_t oled_buffer[AIR_LCD_H_RES * AIR_LCD_V_RES / 8];
 
 
 extern esp_lcd_panel_handle_t panel_handle;
 extern esp_lcd_panel_io_handle_t io_handle;
 
-extern float g_dart_hcho_mg;
-extern float g_winsen_hcho_mg;
+extern float g_dart_hcho_mg, g_dart_hcho_ppb;
+extern float g_winsen_hcho_mg, g_winsen_hcho_ppb;
 
 // LVGL library is not thread-safe, this example will call LVGL APIs from different tasks, so use a mutex to protect it
 static _lock_t lvgl_api_lock;
 
-// extern void example_lvgl_demo_ui(lv_disp_t *disp);
 
-static bool example_notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t io_panel, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
+static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t io_panel, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
     lv_display_t *disp = (lv_display_t *)user_ctx;
     lv_display_flush_ready(disp);
     return false;
 }
 
-static void example_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
+static void display_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
     esp_lcd_panel_handle_t panel_handle = lv_display_get_user_data(disp);
 
     // This is necessary because LVGL reserves 2 x 4 bytes in the buffer, as these are assumed to be used as a palette. Skip the palette here
     // More information about the monochrome, please refer to https://docs.lvgl.io/9.2/porting/display.html#monochrome-displays
-    px_map += EXAMPLE_LVGL_PALETTE_SIZE;
+    px_map += AIR_LVGL_PALETTE_SIZE;
 
     uint16_t hor_res = lv_display_get_physical_horizontal_resolution(disp);
     int x1 = area->x1;
@@ -87,10 +86,10 @@ static void example_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uin
     esp_lcd_panel_draw_bitmap(panel_handle, x1, y1, x2 + 1, y2 + 1, oled_buffer);
 }
 
-static void example_increase_lvgl_tick(void *arg)
+static void display_increase_lvgl_tick(void *arg)
 {
     /* Tell LVGL how many milliseconds has elapsed */
-    lv_tick_inc(EXAMPLE_LVGL_TICK_PERIOD_MS);
+    lv_tick_inc(AIR_LVGL_TICK_PERIOD_MS);
 }
 
 static void lvgl_port_task(void *arg)
@@ -102,15 +101,13 @@ static void lvgl_port_task(void *arg)
         _lock_acquire(&lvgl_api_lock);
         time_till_next_ms = lv_timer_handler();
         // 在主循环中刷新甲醛浓度显示
-        extern float g_dart_hcho_mg, g_dart_hcho_ppb;
-        extern float g_winsen_hcho_mg, g_winsen_hcho_ppb;
         lvgl_update_dart_ch2o(display, g_dart_hcho_mg, g_dart_hcho_ppb);
         lvgl_update_winsen_ch2o(display, g_winsen_hcho_mg, g_winsen_hcho_ppb);
         _lock_release(&lvgl_api_lock);
         // in case of triggering a task watch dog time out
-        time_till_next_ms = MAX(time_till_next_ms, EXAMPLE_LVGL_TASK_MIN_DELAY_MS);
+        time_till_next_ms = MAX(time_till_next_ms, AIR_LVGL_TASK_MIN_DELAY_MS);
         // in case of lvgl display not ready yet
-        time_till_next_ms = MIN(time_till_next_ms, EXAMPLE_LVGL_TASK_MAX_DELAY_MS);
+        time_till_next_ms = MIN(time_till_next_ms, AIR_LVGL_TASK_MAX_DELAY_MS);
         usleep(1000 * time_till_next_ms);
     }
 }
@@ -119,16 +116,19 @@ static void lvgl_port_task(void *arg)
 esp_err_t init_lvgl_display(void)
 {
     ESP_LOGI(TAG, "Initialize LVGL");
+    
     lv_init();
+    
     // create a lvgl display
-    lv_disp_t *display = lv_display_create(EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES);
+    lv_disp_t *display = lv_display_create(AIR_LCD_H_RES, AIR_LCD_V_RES);
     // associate the i2c panel handle to the display
     lv_display_set_user_data(display, panel_handle);
+    
     // create draw buffer
     void *buf = NULL;
     ESP_LOGI(TAG, "Allocate separate LVGL draw buffers");
     // LVGL reserves 2 x 4 bytes in the buffer, as these are assumed to be used as a palette.
-    size_t draw_buffer_sz = EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES / 8 + EXAMPLE_LVGL_PALETTE_SIZE;
+    size_t draw_buffer_sz = AIR_LCD_H_RES * AIR_LCD_V_RES / 8 + AIR_LVGL_PALETTE_SIZE;
     buf = heap_caps_calloc(1, draw_buffer_sz, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     assert(buf);
 
@@ -137,26 +137,26 @@ esp_err_t init_lvgl_display(void)
     // initialize LVGL draw buffers
     lv_display_set_buffers(display, buf, NULL, draw_buffer_sz, LV_DISPLAY_RENDER_MODE_FULL);
     // set the callback which can copy the rendered image to an area of the display
-    lv_display_set_flush_cb(display, example_lvgl_flush_cb);
+    lv_display_set_flush_cb(display, display_lvgl_flush_cb);
 
     ESP_LOGI(TAG, "Register io panel event callback for LVGL flush ready notification");
     const esp_lcd_panel_io_callbacks_t cbs = {
-        .on_color_trans_done = example_notify_lvgl_flush_ready,
+        .on_color_trans_done = notify_lvgl_flush_ready,
     };
     /* Register done callback */
     esp_lcd_panel_io_register_event_callbacks(io_handle, &cbs, display);
 
     ESP_LOGI(TAG, "Use esp_timer as LVGL tick timer");
     const esp_timer_create_args_t lvgl_tick_timer_args = {
-        .callback = &example_increase_lvgl_tick,
+        .callback = &display_increase_lvgl_tick,
         .name = "lvgl_tick"
     };
     esp_timer_handle_t lvgl_tick_timer = NULL;
     ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, AIR_LVGL_TICK_PERIOD_MS * 1000));
 
     ESP_LOGI(TAG, "Create LVGL task");
-    xTaskCreate(lvgl_port_task, "LVGL", EXAMPLE_LVGL_TASK_STACK_SIZE, display, EXAMPLE_LVGL_TASK_PRIORITY, NULL);
+    xTaskCreate(lvgl_port_task, "LVGL", AIR_LVGL_TASK_STACK_SIZE, display, AIR_LVGL_TASK_PRIORITY, NULL);
 
     ESP_LOGI(TAG, "Display LVGL Scroll Text");
     // Lock the mutex due to the LVGL APIs are not thread-safe
@@ -196,7 +196,7 @@ void lvgl_main_ui(lv_display_t *disp)
     lv_obj_t *scr = lv_display_get_screen_active(disp);
     
     lv_obj_t *label = lv_label_create(scr);
-    // lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR); /* Circular scroll */
+
     lv_label_set_text(label, " Air Quality:  ");
     /* Size of the screen (if you use rotation 90 or 270, please use lv_display_get_vertical_resolution) */
     lv_obj_set_width(label, lv_display_get_horizontal_resolution(disp));
