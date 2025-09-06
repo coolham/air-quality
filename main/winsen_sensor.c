@@ -18,7 +18,7 @@
 #define WINSEN_UART_BUF_SIZE     128
 #define WINSEN_FRAME_SIZE        9       // WINSEN协议帧长度
 
-static const char *TAG = "winsen_sensor";
+static const char *TAG = "winsen";
 
 
 // 气体浓度修正系数，默认4，可通过 setter 修改

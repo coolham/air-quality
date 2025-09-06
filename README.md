@@ -11,47 +11,47 @@ esp-idf v5.5
 
 ## 硬件接线说明（ESP32 模组）
 
-[甲醛测试仪](./images/HCHO_monitor_1.jpg)
+![甲醛测试仪](./images/HCHO_monitor_1.jpg)
 
 ### 1. SSD1306 OLED 显示屏
 - 通信方式：I2C
-- SCL（时钟）：连接 ESP32S3 的 GPIO 17
-- SDA（数据）：连接 ESP32S3 的 GPIO 16
+- SCL（时钟）：连接 ESP32 的 GPIO 17
+- SDA（数据）：连接 ESP32 的 GPIO 16
 - VCC：3.3V
 - GND：GND
 
 ### 2. DART 甲醛传感器（UART1）
-- TX（传感器输出）：连接 ESP32S3 的 GPIO 19（UART1 RX）
-- RX（传感器输入）：连接 ESP32S3 的 GPIO 18（UART1 TX）
+- TX（传感器输出）：连接 ESP32 的 GPIO 19（UART1 RX）
+- RX（传感器输入）：连接 ESP32 的 GPIO 18（UART1 TX）
 - VCC：3.3V 或 5V（根据传感器规格）
 - GND：GND
 
 ### 3. 其他 UART 传感器（UART2，举例）
-- TX（传感器输出）：连接 ESP32S3 的 GPIO 21（UART2 RX）
-- RX（传感器输入）：连接 ESP32S3 的 GPIO 20（UART2 TX）
+- TX（传感器输出）：连接 ESP32 的 GPIO 21（UART2 RX）
+- RX（传感器输入）：连接 ESP32 的 GPIO 20（UART2 TX）
 - VCC：3.3V 或 5V
 - GND：GND
 
 ### 4. 供电
-- ESP32S3、显示屏、传感器共用 3.3V 或 5V 电源，GND 共地。
+- ESP32、显示屏、传感器共用 3.3V 或 5V 电源，GND 共地。
 
 ### 5. 典型接线图
 ```
-SSD1306 (I2C)      ESP32S3
+SSD1306 (I2C)      ESP32
 -----------------------------
 SCL   <-------->   GPIO17
 SDA   <-------->   GPIO16
 VCC   <-------->   3.3V
 GND   <-------->   GND
 
-DART传感器 (UART1) ESP32S3
+DART传感器 (UART1) ESP32
 -----------------------------
 TX    <-------->   GPIO19 (RX1)
 RX    <-------->   GPIO18 (TX1)
 VCC   <-------->   3.3V/5V
 GND   <-------->   GND
 
-其他传感器 (UART2) ESP32S3
+其他传感器 (UART2) ESP32
 -----------------------------
 TX    <-------->   GPIO21 (RX2)
 RX    <-------->   GPIO20 (TX2)

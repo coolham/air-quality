@@ -11,14 +11,14 @@
 #include "lvgl_screen_ui.h"
 #include "sys/lock.h"
 
-#define DART_UART_PORT_NUM      UART_NUM_1
+#define DART_UART_PORT_NUM     UART_NUM_1
 #define DART_UART_BAUD_RATE    9600
 #define DART_UART_TX_PIN       18
 #define DART_UART_RX_PIN       19
 #define DART_UART_BUF_SIZE     128
 #define DART_FRAME_SIZE        9       // DART协议帧长度
 
-static const char *TAG = "dart_sensor";
+static const char *TAG = "dart";
 
 // 气体浓度修正系数，默认4，可通过 setter 修改
 static float g_ch2o_correction_factor = 4.0f;
