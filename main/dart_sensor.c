@@ -9,7 +9,9 @@
 #include "esp_timer.h"
 #include <time.h>
 #include "lvgl_screen_ui.h"
+
 #include "sys/lock.h"
+#include "protocols/mqtt_device.h"
 
 #define DART_UART_PORT_NUM     UART_NUM_1
 #define DART_UART_BAUD_RATE    9600
@@ -682,7 +684,9 @@ static void dart_sensor_consumer_task(void *pvParameters) {
             g_dart_hcho_ppb = data.ch2o_ppb;
             g_dart_hcho_timestamp = data.timestamp;
             ESP_LOGD(TAG, "Queue received: %.3f mg/m3, %.1f ppb, timestamp: %lu s", g_dart_hcho_mg, g_dart_hcho_ppb, (unsigned long)g_dart_hcho_timestamp);
-        }   
+            // 上传到MQTT
+            mqtt_device_publish_dart(g_dart_hcho_mg, g_dart_hcho_ppb);
+        }
         vTaskDelay(pdMS_TO_TICKS(10)); // 避免任务饥饿
     }
 }

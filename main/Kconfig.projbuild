@@ -113,4 +113,28 @@ menu "Air Quality Configuration"
 
     endif
 
+    config MQTT_BROKER_URL
+        string "MQTT Broker URL"
+        default "mqtt://localhost"
+        help
+            URL of the MQTT broker to connect to
+
+    config MQTT_CLIENT_ID
+        string "MQTT Client ID"
+        default "esp32_client"
+        help
+            Client ID to use when connecting to the MQTT broker
+
+    config MQTT_USERNAME
+        string "MQTT Username"
+        default "user"
+        help
+            Username for MQTT authentication
+
+    config MQTT_PASSWORD
+        string "MQTT Password"
+        default "password"
+        help
+            Password for MQTT authentication
+
 endmenu

@@ -33,6 +33,9 @@ Air Quality Monitoring:
 #include "esp_lcd_panel_vendor.h"
 #endif
 
+extern float g_dart_hcho_mg, g_dart_hcho_ppb;
+extern float g_winsen_hcho_mg, g_winsen_hcho_ppb;
+
 static const char *TAG = "main";
 
 #define I2C_BUS_PORT  0
@@ -123,6 +126,17 @@ esp_err_t init_lcd_device()
     return ESP_OK;
 }
 
+void air_quality_mqtt_task(void *arg) {
+    air_quality_data_t data;
+    while (1) {
+        data.dart_hcho_mg = g_dart_hcho_mg;
+        data.dart_hcho_ppb = g_dart_hcho_ppb;
+        data.winsen_hcho_mg = g_winsen_hcho_mg;
+        data.winsen_hcho_ppb = g_winsen_hcho_ppb;
+        mqtt_device_publish_air_quality(&data);
+        vTaskDelay(pdMS_TO_TICKS(5000)); // 每5秒上传一次
+    }
+}
 
 void app_main(void)
 {
@@ -157,8 +171,9 @@ void app_main(void)
     // init WiFi
     wifi_init_sta();
 
-    // xTaskCreate(mqtt_task, "mqtt_task", 4096, NULL, 5, NULL);
-    // mqtt_task();
+    mqtt_device_start();
+
+    // xTaskCreate(air_quality_mqtt_task, "air_quality_mqtt_task", 4096, NULL, 5, NULL);
     
     while(1){
         vTaskDelay(pdMS_TO_TICKS(1000));

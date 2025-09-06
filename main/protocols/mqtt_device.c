@@ -1,5 +1,3 @@
-
-
 /* MQTT (over TCP) Example
 
    This example code is in the Public Domain (or CC0 licensed, at your option.)
@@ -102,15 +100,52 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
-void mqtt_task()
+static esp_mqtt_client_handle_t s_mqtt_client = NULL;
+
+esp_err_t mqtt_device_start(void)
 {
-    ESP_LOGI(TAG, "Starting MQTT task");
+    ESP_LOGI(TAG, "Starting MQTT client");
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = CONFIG_BROKER_URL,
     };
-    esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
-    /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
-    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
-    esp_mqtt_client_start(client);
-    ESP_LOGI(TAG, "MQTT task started.");
+    s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
+    if (!s_mqtt_client) {
+        ESP_LOGE(TAG, "Failed to init mqtt client");
+        return ESP_FAIL;
+    }
+    esp_mqtt_client_register_event(s_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    esp_mqtt_client_start(s_mqtt_client);
+    ESP_LOGI(TAG, "MQTT client started.");
+    return ESP_OK;
+}
+
+esp_err_t mqtt_device_publish_winsen(float mg, float ppb)
+{
+    if (!s_mqtt_client) return ESP_FAIL;
+    char payload[64];
+    snprintf(payload, sizeof(payload), "{\"mg\":%.3f,\"ppb\":%.1f}", mg, ppb);
+    int msg_id = esp_mqtt_client_publish(s_mqtt_client, "air_quality/winsen", payload, 0, 1, 0);
+    ESP_LOGI(TAG, "Publish winsen: %s, msg_id=%d", payload, msg_id);
+    return msg_id >= 0 ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t mqtt_device_publish_dart(float mg, float ppb)
+{
+    if (!s_mqtt_client) return ESP_FAIL;
+    char payload[64];
+    snprintf(payload, sizeof(payload), "{\"mg\":%.3f,\"ppb\":%.1f}", mg, ppb);
+    int msg_id = esp_mqtt_client_publish(s_mqtt_client, "air_quality/dart", payload, 0, 1, 0);
+    ESP_LOGI(TAG, "Publish dart: %s, msg_id=%d", payload, msg_id);
+    return msg_id >= 0 ? ESP_OK : ESP_FAIL;
+}
+
+esp_err_t mqtt_device_publish_air_quality(const air_quality_data_t *data)
+{
+    if (!s_mqtt_client || !data) return ESP_FAIL;
+    char payload[128];
+    snprintf(payload, sizeof(payload), "{\"dart_mg\":%.3f,\"dart_ppb\":%.1f,\"winsen_mg\":%.3f,\"winsen_ppb\":%.1f}",
+        data->dart_hcho_mg, data->dart_hcho_ppb, data->winsen_hcho_mg, data->winsen_hcho_ppb);
+    int msg_id = esp_mqtt_client_publish(s_mqtt_client, "air_quality/all", payload, 0, 1, 0);
+    ESP_LOGI(TAG, "Publish all: %s, msg_id=%d", payload, msg_id);
+    return msg_id >= 0 ? ESP_OK : ESP_FAIL;
 }
