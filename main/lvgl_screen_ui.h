@@ -3,6 +3,17 @@
 
 #include "lvgl.h"
 
+// The pixel number in horizontal and vertical
+#if CONFIG_LCD_CONTROLLER_SSD1306
+#define EXAMPLE_LCD_H_RES              128
+#define EXAMPLE_LCD_V_RES              CONFIG_SSD1306_HEIGHT
+#elif CONFIG_LCD_CONTROLLER_SH1107
+#define EXAMPLE_LCD_H_RES              64
+#define EXAMPLE_LCD_V_RES              128
+#endif
+
+
+esp_err_t init_lvgl_display(void);
 void lvgl_main_ui(lv_display_t *disp);
 // void lvgl_port_task(void *arg);
 
