@@ -137,10 +137,10 @@ static void lvgl_port_task(void *arg)
         _lock_acquire(&lvgl_api_lock);
         time_till_next_ms = lv_timer_handler();
         // 在主循环中刷新甲醛浓度显示
-        extern float g_dart_hcho_mg;
-        extern float g_winsen_hcho_mg;
-        lvgl_update_dart_ch2o(display, g_dart_hcho_mg, 0);
-        lvgl_update_winsen_ch2o(display, g_winsen_hcho_mg, 0);
+        extern float g_dart_hcho_mg, g_dart_hcho_ppb;
+        extern float g_winsen_hcho_mg, g_winsen_hcho_ppb;
+        lvgl_update_dart_ch2o(display, g_dart_hcho_mg, g_dart_hcho_ppb);
+        lvgl_update_winsen_ch2o(display, g_winsen_hcho_mg, g_winsen_hcho_ppb);
         _lock_release(&lvgl_api_lock);
         // in case of triggering a task watch dog time out
         time_till_next_ms = MAX(time_till_next_ms, EXAMPLE_LVGL_TASK_MIN_DELAY_MS);
@@ -281,4 +281,7 @@ void app_main(void)
     // xTaskCreate(mqtt_task, "mqtt_task", 4096, NULL, 5, NULL);
     // mqtt_task();
     
+    while(1){
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 }

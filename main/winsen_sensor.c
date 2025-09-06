@@ -29,6 +29,7 @@ static QueueHandle_t winsen_sensor_queue = NULL;
 
 
 float g_winsen_hcho_mg = 0.0f;
+float g_winsen_hcho_ppb = 0.0f;
 uint32_t winsen_ch2o_timestamp = 0;
 static uint32_t winsen_dart_read_count = 0;
 
@@ -683,8 +684,9 @@ static void winsen_sensor_consumer_task(void *pvParameters) {
     while (1) {
         if (xQueueReceive(winsen_sensor_queue, &data, portMAX_DELAY) == pdTRUE) {
             g_winsen_hcho_mg = data.ch2o_ugm3 * 0.001f;
+            g_winsen_hcho_ppb = data.ch2o_ppb;
             winsen_ch2o_timestamp = data.timestamp;
-            ESP_LOGD(TAG, "Queue received: %.3f mg/m3, timestamp: %lu s", g_winsen_hcho_mg, (unsigned long)winsen_ch2o_timestamp);
+            ESP_LOGD(TAG, "Queue received: %.3f mg/m3, %.1f ppb, timestamp: %lu s", g_winsen_hcho_mg, g_winsen_hcho_ppb, (unsigned long)winsen_ch2o_timestamp);
         }   
         vTaskDelay(pdMS_TO_TICKS(10)); // 避免任务饥饿
     }

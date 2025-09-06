@@ -27,6 +27,7 @@ static QueueHandle_t dart_sensor_queue = NULL;
 _lock_t lvgl_api_lock;
 
 float g_dart_hcho_mg = 0.0f;
+float g_dart_hcho_ppb = 0.0f;
 uint32_t g_dart_hcho_timestamp = 0;
 static uint32_t g_dart_read_count = 0;
 
@@ -678,8 +679,9 @@ static void dart_sensor_consumer_task(void *pvParameters) {
     while (1) {
         if (xQueueReceive(dart_sensor_queue, &data, portMAX_DELAY) == pdTRUE) {
             g_dart_hcho_mg = data.ch2o_ugm3 * 0.001f;
+            g_dart_hcho_ppb = data.ch2o_ppb;
             g_dart_hcho_timestamp = data.timestamp;
-            ESP_LOGD(TAG, "Queue received: %.3f mg/m3, timestamp: %lu s", g_dart_hcho_mg, (unsigned long)g_dart_hcho_timestamp);
+            ESP_LOGD(TAG, "Queue received: %.3f mg/m3, %.1f ppb, timestamp: %lu s", g_dart_hcho_mg, g_dart_hcho_ppb, (unsigned long)g_dart_hcho_timestamp);
         }   
         vTaskDelay(pdMS_TO_TICKS(10)); // 避免任务饥饿
     }
