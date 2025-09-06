@@ -116,7 +116,7 @@ static int dart_uart_send(const uint8_t *data, int len, const char *desc)
     
     // 打印发送的数据
     bytes_to_hex_str(data, len, hex_str, sizeof(hex_str));
-    ESP_LOGI(TAG, "UART TX [%s]: %s", desc ? desc : "send", hex_str);
+    ESP_LOGD(TAG, "UART TX [%s]: %s", desc ? desc : "send", hex_str);
     
     // 发送数据
     int send_bytes = uart_write_bytes(DART_UART_PORT_NUM, (const char*)data, len);
@@ -147,7 +147,7 @@ static int dart_uart_receive(uint8_t *buf, int buf_size, int timeout_ms, const c
     if (len > 0) {
         // 打印接收到的数据
         bytes_to_hex_str(buf, len > 32 ? 32 : len, hex_str, sizeof(hex_str));
-        ESP_LOGI(TAG, "UART RX [%s]: %s%s", desc ? desc : "recv", hex_str, 
+        ESP_LOGD(TAG, "UART RX [%s]: %s%s", desc ? desc : "recv", hex_str, 
                  len > 32 ? "..." : "");
     } else if (len == 0) {
         ESP_LOGD(TAG, "UART RX [%s]: Timeout, no data received in %d ms", 

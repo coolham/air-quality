@@ -20,6 +20,9 @@ Air Quality Monitoring:
 #include "nvs_flash.h"
 #include "driver/i2c_master.h"
 #include "lvgl.h"
+#if !defined(lv_disp_t)
+#define lv_disp_t lv_display_t
+#endif
 #include "dart_sensor.h"
 #include "winsen_sensor.h"
 #include "freertos/queue.h"
@@ -67,6 +70,8 @@ static const char *TAG = "main";
 
 // To use LV_COLOR_FORMAT_I1, we need an extra buffer to hold the converted data
 static uint8_t oled_buffer[EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES / 8];
+
+
 // LVGL library is not thread-safe, this example will call LVGL APIs from different tasks, so use a mutex to protect it
 static _lock_t lvgl_api_lock;
 
@@ -125,6 +130,7 @@ static void example_increase_lvgl_tick(void *arg)
 
 static void lvgl_port_task(void *arg)
 {
+    lv_disp_t *display = (lv_disp_t *)arg;
     ESP_LOGI(TAG, "Starting LVGL task");
     uint32_t time_till_next_ms = 0;
     while (1) {
@@ -133,10 +139,9 @@ static void lvgl_port_task(void *arg)
         // 在主循环中刷新甲醛浓度显示
         extern float g_dart_hcho_mg;
         extern float g_winsen_hcho_mg;
-        lvgl_update_dart_ch2o(g_dart_hcho_mg, 0);
-        lvgl_update_winsen_ch2o(g_winsen_hcho_mg, 0);
+        lvgl_update_dart_ch2o(display, g_dart_hcho_mg, 0);
+        lvgl_update_winsen_ch2o(display, g_winsen_hcho_mg, 0);
         _lock_release(&lvgl_api_lock);
-        
         // in case of triggering a task watch dog time out
         time_till_next_ms = MAX(time_till_next_ms, EXAMPLE_LVGL_TASK_MIN_DELAY_MS);
         // in case of lvgl display not ready yet
@@ -214,7 +219,7 @@ void app_main(void)
     ESP_LOGI(TAG, "Initialize LVGL");
     lv_init();
     // create a lvgl display
-    lv_display_t *display = lv_display_create(EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES);
+    lv_disp_t *display = lv_display_create(EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES);
     // associate the i2c panel handle to the display
     lv_display_set_user_data(display, panel_handle);
     // create draw buffer
@@ -249,10 +254,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000));
 
 
-
-
     ESP_LOGI(TAG, "Create LVGL task");
-    xTaskCreate(lvgl_port_task, "LVGL", EXAMPLE_LVGL_TASK_STACK_SIZE, NULL, EXAMPLE_LVGL_TASK_PRIORITY, NULL);
+    xTaskCreate(lvgl_port_task, "LVGL", EXAMPLE_LVGL_TASK_STACK_SIZE, display, EXAMPLE_LVGL_TASK_PRIORITY, NULL);
 
     ESP_LOGI(TAG, "Display LVGL Scroll Text");
     // Lock the mutex due to the LVGL APIs are not thread-safe
