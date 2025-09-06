@@ -46,4 +46,5 @@ managed_components
 dependencies.lock
 **/venv
 **/__pycache__
+.vscode
 

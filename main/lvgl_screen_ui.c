@@ -23,21 +23,24 @@ extern float g_winsen_hcho_mg;
 
 void lvgl_update_dart_ch2o(float mg, float ppb)
 {
-    if (dart_hcho_label) {
+    static float last_mg = -1.0f;
+    if (dart_hcho_label && mg != last_mg) {
         char buf[128];
         snprintf(buf, sizeof(buf), " HCHO: %.3f mg/m3 - Real-time Formaldehyde", mg);
         lv_label_set_text(dart_hcho_label, buf);
+        last_mg = mg;
     }
- 
 }
 
 void lvgl_update_winsen_ch2o(float mg, float ppb)
 {
-    if (winsen_hcho_label) {
+    static float last_mg = -1.0f;
+    if (winsen_hcho_label && mg != last_mg) {
         char buf[128];
         snprintf(buf, sizeof(buf), " HCHO: %.3f mg/m3 - Winsen Sensor", mg);
         lv_label_set_text(winsen_hcho_label, buf);
-    }   
+        last_mg = mg;
+    }
 }
 
 
