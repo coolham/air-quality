@@ -68,6 +68,11 @@ static const char *TAG = "main";
 #define EXAMPLE_LVGL_TASK_MAX_DELAY_MS 500
 #define EXAMPLE_LVGL_TASK_MIN_DELAY_MS 1000 / CONFIG_FREERTOS_HZ
 
+i2c_master_bus_handle_t i2c_bus = NULL;
+esp_lcd_panel_io_handle_t io_handle = NULL;
+esp_lcd_panel_handle_t panel_handle = NULL;
+
+
 // To use LV_COLOR_FORMAT_I1, we need an extra buffer to hold the converted data
 static uint8_t oled_buffer[EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES / 8];
 
@@ -150,18 +155,12 @@ static void lvgl_port_task(void *arg)
     }
 }
 
-void app_main(void)
+esp_err_t init_i2c_bus()
 {
-    //Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
     ESP_LOGI(TAG, "Initialize I2C bus");
-    i2c_master_bus_handle_t i2c_bus = NULL;
+    
+    // i2c_master_bus_handle_t i2c_bus = NULL;
+
     i2c_master_bus_config_t bus_config = {
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
@@ -171,9 +170,15 @@ void app_main(void)
         .flags.enable_internal_pullup = true,
     };
     ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &i2c_bus));
+    return ESP_OK;
+}
 
+esp_err_t init_lcd_device()
+{
     ESP_LOGI(TAG, "Install panel IO");
-    esp_lcd_panel_io_handle_t io_handle = NULL;
+    
+    // esp_lcd_panel_io_handle_t io_handle = NULL;
+
     esp_lcd_panel_io_i2c_config_t io_config = {
         .dev_addr = EXAMPLE_I2C_HW_ADDR,
         .scl_speed_hz = EXAMPLE_LCD_PIXEL_CLOCK_HZ,
@@ -193,7 +198,9 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(i2c_bus, &io_config, &io_handle));
 
     ESP_LOGI(TAG, "Install SSD1306 panel driver");
-    esp_lcd_panel_handle_t panel_handle = NULL;
+    
+    // esp_lcd_panel_handle_t panel_handle = NULL;
+    
     esp_lcd_panel_dev_config_t panel_config = {
         .bits_per_pixel = 1,
         .reset_gpio_num = EXAMPLE_PIN_NUM_RST,
@@ -215,6 +222,82 @@ void app_main(void)
 #if CONFIG_LCD_CONTROLLER_SH1107
     ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, true));
 #endif
+
+    return ESP_OK;
+}
+
+
+void app_main(void)
+{
+    //Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+      ESP_ERROR_CHECK(nvs_flash_erase());
+      ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // ESP_LOGI(TAG, "Initialize I2C bus");
+    // i2c_master_bus_handle_t i2c_bus = NULL;
+    // i2c_master_bus_config_t bus_config = {
+    //     .clk_source = I2C_CLK_SRC_DEFAULT,
+    //     .glitch_ignore_cnt = 7,
+    //     .i2c_port = I2C_BUS_PORT,
+    //     .sda_io_num = EXAMPLE_PIN_NUM_SDA,
+    //     .scl_io_num = EXAMPLE_PIN_NUM_SCL,
+    //     .flags.enable_internal_pullup = true,
+    // };
+    // ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &i2c_bus));
+
+    // 初始化I2C总线
+    init_i2c_bus();
+
+//     ESP_LOGI(TAG, "Install panel IO");
+//     esp_lcd_panel_io_handle_t io_handle = NULL;
+//     esp_lcd_panel_io_i2c_config_t io_config = {
+//         .dev_addr = EXAMPLE_I2C_HW_ADDR,
+//         .scl_speed_hz = EXAMPLE_LCD_PIXEL_CLOCK_HZ,
+//         .control_phase_bytes = 1,               // According to SSD1306 datasheet
+//         .lcd_cmd_bits = EXAMPLE_LCD_CMD_BITS,   // According to SSD1306 datasheet
+//         .lcd_param_bits = EXAMPLE_LCD_CMD_BITS, // According to SSD1306 datasheet
+// #if CONFIG_LCD_CONTROLLER_SSD1306
+//         .dc_bit_offset = 6,                     // According to SSD1306 datasheet
+// #elif CONFIG_LCD_CONTROLLER_SH1107
+//         .dc_bit_offset = 0,                     // According to SH1107 datasheet
+//         .flags =
+//         {
+//             .disable_control_phase = 1,
+//         }
+// #endif
+//     };
+//     ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(i2c_bus, &io_config, &io_handle));
+
+//     ESP_LOGI(TAG, "Install SSD1306 panel driver");
+//     esp_lcd_panel_handle_t panel_handle = NULL;
+//     esp_lcd_panel_dev_config_t panel_config = {
+//         .bits_per_pixel = 1,
+//         .reset_gpio_num = EXAMPLE_PIN_NUM_RST,
+//     };
+// #if CONFIG_LCD_CONTROLLER_SSD1306
+//     esp_lcd_panel_ssd1306_config_t ssd1306_config = {
+//         .height = EXAMPLE_LCD_V_RES,
+//     };
+//     panel_config.vendor_config = &ssd1306_config;
+//     ESP_ERROR_CHECK(esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &panel_handle));
+// #elif CONFIG_LCD_CONTROLLER_SH1107
+//     ESP_ERROR_CHECK(esp_lcd_new_panel_sh1107(io_handle, &panel_config, &panel_handle));
+// #endif
+
+//     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
+//     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
+//     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
+
+// #if CONFIG_LCD_CONTROLLER_SH1107
+//     ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, true));
+// #endif
+
+    // Initialize LCD device
+    init_lcd_device();
 
     ESP_LOGI(TAG, "Initialize LVGL");
     lv_init();

@@ -26,7 +26,7 @@ void lvgl_update_dart_ch2o(lv_display_t *disp, float mg, float ppb)
     static float last_mg = -1.0f;
     if (dart_hcho_label && mg != last_mg) {
         char buf[128];
-        snprintf(buf, sizeof(buf), "Dart HCHO: %.3f mg/m3, %.1f ppb", mg, ppb);
+        snprintf(buf, sizeof(buf), "Dart HCHO: %.3f mg/m3, %d ppb", mg, (int)ppb);
         lv_label_set_text(dart_hcho_label, buf);
         last_mg = mg;
     }
@@ -37,7 +37,7 @@ void lvgl_update_winsen_ch2o(lv_display_t *disp, float mg, float ppb)
     static float last_mg = -1.0f;
     if (winsen_hcho_label && mg != last_mg) {
         char buf[128];
-        snprintf(buf, sizeof(buf), "Winsen HCHO: %.3f mg/m3, %.1f ppb", mg, ppb);
+        snprintf(buf, sizeof(buf), "Winsen HCHO: %.3f mg/m3, %d ppb", mg, (int)ppb);
         lv_label_set_text(winsen_hcho_label, buf);
         last_mg = mg;
     }
