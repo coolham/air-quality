@@ -1,3 +1,4 @@
+
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -61,6 +62,10 @@ static const char *TAG = "wifi";
 
 static int s_retry_num = 0;
 
+// 供主程序判断WiFi连接状态
+EventBits_t wifi_get_event_bits(void) {
+    return xEventGroupGetBits(s_wifi_event_group);
+}
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
@@ -86,6 +91,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 
 void wifi_init_sta(void)
 {
+    ESP_LOGI(TAG, "wifi_init_sta start");
     s_wifi_event_group = xEventGroupCreate();
 
     ESP_ERROR_CHECK(esp_netif_init());

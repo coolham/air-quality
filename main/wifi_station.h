@@ -1,3 +1,5 @@
+#include "freertos/event_groups.h"
+EventBits_t wifi_get_event_bits(void);
 #ifndef __WIFI_STATION_H__
 #define __WIFI_STATION_H__
 

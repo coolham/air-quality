@@ -685,7 +685,7 @@ static void dart_sensor_consumer_task(void *pvParameters) {
             g_dart_hcho_timestamp = data.timestamp;
             ESP_LOGD(TAG, "Queue received: %.3f mg/m3, %.1f ppb, timestamp: %lu s", g_dart_hcho_mg, g_dart_hcho_ppb, (unsigned long)g_dart_hcho_timestamp);
             // 上传到MQTT
-            mqtt_device_publish_dart(g_dart_hcho_mg, g_dart_hcho_ppb);
+            mqtt_device_publish_sensor("dart", "hcho", g_dart_hcho_mg, g_dart_hcho_ppb);
         }
         vTaskDelay(pdMS_TO_TICKS(10)); // 避免任务饥饿
     }
@@ -703,5 +703,5 @@ void dart_sensor_start(void)
 
     // 增加任务栈大小，避免栈溢出
     xTaskCreate(dart_sensor_producer_task, "dart_sensor_produce_task", 3072, NULL, 5, NULL);
-    xTaskCreate(dart_sensor_consumer_task, "dart_sensor_consumer_task", 2048, NULL, 4, NULL);
+    xTaskCreate(dart_sensor_consumer_task, "dart_sensor_consumer_task", 6144, NULL, 4, NULL);
 }

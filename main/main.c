@@ -25,7 +25,10 @@ Air Quality Monitoring:
 #include "freertos/queue.h"
 #include "lvgl_screen_ui.h"
 #include "wifi_station.h"
+
 #include "protocols/mqtt_device.h"
+
+#define APP_VERSION "v1.0.0"
 
 #if CONFIG_LCD_CONTROLLER_SH1107
 #include "esp_lcd_sh1107.h"
@@ -127,19 +130,21 @@ esp_err_t init_lcd_device()
 }
 
 void air_quality_mqtt_task(void *arg) {
-    air_quality_data_t data;
+    // air_quality_data_t data;
     while (1) {
-        data.dart_hcho_mg = g_dart_hcho_mg;
-        data.dart_hcho_ppb = g_dart_hcho_ppb;
-        data.winsen_hcho_mg = g_winsen_hcho_mg;
-        data.winsen_hcho_ppb = g_winsen_hcho_ppb;
-        mqtt_device_publish_air_quality(&data);
+        // data.dart_hcho_mg = g_dart_hcho_mg;
+        // data.dart_hcho_ppb = g_dart_hcho_ppb;
+        // data.winsen_hcho_mg = g_winsen_hcho_mg;
+        // data.winsen_hcho_ppb = g_winsen_hcho_ppb;
+        // mqtt_device_publish_air_quality(&data);
         vTaskDelay(pdMS_TO_TICKS(5000)); // 每5秒上传一次
     }
 }
 
 void app_main(void)
 {
+    ESP_LOGI(TAG, "Air Quality Monitor - Version: %s", APP_VERSION);
+
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -169,12 +174,20 @@ void app_main(void)
     }
 
     // init WiFi
+
     wifi_init_sta();
 
-    mqtt_device_start();
+    // 只有WiFi连接成功才启动MQTT
+    if (wifi_get_event_bits() & BIT0) {
+        ESP_LOGI(TAG, "WiFi connected, starting MQTT client.");
+        mqtt_device_start();
+    } else {
+        ESP_LOGE(TAG, "WiFi not connected, MQTT client will not start.");
+    }
 
     // xTaskCreate(air_quality_mqtt_task, "air_quality_mqtt_task", 4096, NULL, 5, NULL);
-    
+    ESP_LOGI(TAG, "main init completed.");
+
     while(1){
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

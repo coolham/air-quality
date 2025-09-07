@@ -17,14 +17,8 @@ typedef struct {
 // 初始化MQTT客户端，连接服务器
 esp_err_t mqtt_device_start(void);
 
-// 发布 Dart 传感器数据
-esp_err_t mqtt_device_publish_dart(float mg, float ppb);
-// 发布 Winsen 传感器数据
-esp_err_t mqtt_device_publish_winsen(float mg, float ppb);
-
-
-esp_err_t mqtt_device_publish_air_quality(const air_quality_data_t *data);
-
+// 发布 传感器数据
+esp_err_t mqtt_device_publish_sensor(const char* sensor_id, const char* sensor_type, float mg, float ppb);
 
 
 #endif // MQTT_DEVICE_H

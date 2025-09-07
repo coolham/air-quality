@@ -7,6 +7,7 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
+#include "sdkconfig.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -16,6 +17,7 @@
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
 // #include "protocol_examples_common.h"
 
 #include "esp_log.h"
@@ -24,6 +26,13 @@
 
 
 static const char *TAG = "mqtt";
+
+#define DEVICE_ID "hcho_001"
+#define DEVICE_TYPE "hcho"
+
+
+static esp_mqtt_client_handle_t s_mqtt_client = NULL;
+static bool s_mqtt_connected = false;
 
 
 static void log_error_if_nonzero(const char *message, int error_code)
@@ -51,6 +60,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     int msg_id;
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
+        s_mqtt_connected = true;
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
         msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "data_3", 0, 1, 0);
         ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
@@ -65,6 +75,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
         break;
     case MQTT_EVENT_DISCONNECTED:
+        s_mqtt_connected = false;
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
         break;
 
@@ -100,48 +111,51 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
-static esp_mqtt_client_handle_t s_mqtt_client = NULL;
+
 
 esp_err_t mqtt_device_start(void)
 {
-    ESP_LOGI(TAG, "Starting MQTT client");
+    ESP_LOGI(TAG, "Starting mqtt_device_start, broker: %s, user: %s", CONFIG_BROKER_URL, CONFIG_MQTT_USERNAME);
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = CONFIG_BROKER_URL,
+        // .credentials.username = CONFIG_MQTT_USERNAME,
+        // .credentials.authentication.password = CONFIG_MQTT_PASSWORD,
     };
     s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
     if (!s_mqtt_client) {
         ESP_LOGE(TAG, "Failed to init mqtt client");
         return ESP_FAIL;
     }
+    ESP_LOGI(TAG, "Registering MQTT event handler...");
     esp_mqtt_client_register_event(s_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    ESP_LOGI(TAG, "Starting MQTT client (async connect)...");
     esp_mqtt_client_start(s_mqtt_client);
-    ESP_LOGI(TAG, "MQTT client started.");
+    ESP_LOGI(TAG, "MQTT client start command issued.");
     return ESP_OK;
 }
 
-esp_err_t mqtt_device_publish_winsen(float mg, float ppb)
-{
-    if (!s_mqtt_client) return ESP_FAIL;
-    char payload[64];
-    snprintf(payload, sizeof(payload), "{\"mg\":%.3f,\"ppb\":%.1f}", mg, ppb);
-    int msg_id = esp_mqtt_client_publish(s_mqtt_client, "air_quality/winsen", payload, 0, 1, 0);
-    ESP_LOGI(TAG, "Publish winsen: %s, msg_id=%d", payload, msg_id);
-    return msg_id >= 0 ? ESP_OK : ESP_FAIL;
-}
 
-esp_err_t mqtt_device_publish_dart(float mg, float ppb)
+esp_err_t mqtt_device_publish_sensor(const char* sensor_id, const char* sensor_type, float mg, float ppb)
 {
-    if (!s_mqtt_client) return ESP_FAIL;
-    char payload[64];
-    snprintf(payload, sizeof(payload), "{\"mg\":%.3f,\"ppb\":%.1f}", mg, ppb);
-    int msg_id = esp_mqtt_client_publish(s_mqtt_client, "air_quality/dart", payload, 0, 1, 0);
-    ESP_LOGI(TAG, "Publish dart: %s, msg_id=%d", payload, msg_id);
+    if (!s_mqtt_client || !s_mqtt_connected) {
+        ESP_LOGE(TAG, "MQTT client not connected");
+        return ESP_FAIL;
+    }
+    char topic[64];
+    snprintf(topic, sizeof(topic), "air-quality/hcho/%s/data", DEVICE_ID);
+    char payload[256];
+    uint32_t ts = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+    snprintf(payload, sizeof(payload),
+        "{\"device_id\":\"%s\",\"device_type\":\"%s\",\"sensor_id\":\"%s\",\"sensor_type\":\"%s\",\"timestamp\":%lu,\"data\":{\"formaldehyde\":%.3f,\"ppb\":%.1f}}",
+        DEVICE_ID, DEVICE_TYPE, sensor_id, sensor_type, ts, mg, ppb);
+    int msg_id = esp_mqtt_client_publish(s_mqtt_client, topic, payload, 0, 1, 0);
+    ESP_LOGI(TAG, "Publish sensor: topic=%s, payload=%s, msg_id=%d", topic, payload, msg_id);
     return msg_id >= 0 ? ESP_OK : ESP_FAIL;
 }
 
 esp_err_t mqtt_device_publish_air_quality(const air_quality_data_t *data)
 {
-    if (!s_mqtt_client || !data) return ESP_FAIL;
+    if (!s_mqtt_client || !s_mqtt_connected || !data) return ESP_FAIL;
     char payload[128];
     snprintf(payload, sizeof(payload), "{\"dart_mg\":%.3f,\"dart_ppb\":%.1f,\"winsen_mg\":%.3f,\"winsen_ppb\":%.1f}",
         data->dart_hcho_mg, data->dart_hcho_ppb, data->winsen_hcho_mg, data->winsen_hcho_ppb);
