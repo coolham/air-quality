@@ -1,3 +1,4 @@
+
 /*
 Air Quality Monitoring:
 
@@ -25,7 +26,7 @@ Air Quality Monitoring:
 #include "freertos/queue.h"
 #include "lvgl_screen_ui.h"
 #include "wifi_station.h"
-
+#include "protocols/ntp_time.h"
 #include "protocols/mqtt_device.h"
 
 #define APP_VERSION "v1.0.0"
@@ -177,8 +178,10 @@ void app_main(void)
 
     wifi_init_sta();
 
-    // 只有WiFi连接成功才启动MQTT
+
+    // 只有WiFi连接成功才同步NTP并启动MQTT
     if (wifi_get_event_bits() & BIT0) {
+        obtain_time_and_set_offset();
         ESP_LOGI(TAG, "WiFi connected, starting MQTT client.");
         mqtt_device_start();
     } else {

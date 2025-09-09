@@ -14,6 +14,8 @@ typedef struct {
 } air_quality_data_t;
 
 
+void mqtt_device_set_time_offset(time_t real_time);
+
 // 初始化MQTT客户端，连接服务器
 esp_err_t mqtt_device_start(void);
 

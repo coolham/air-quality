@@ -671,7 +671,7 @@ static void dart_sensor_producer_task(void *pvParameters) {
         
         // 等待时间根据模式调整
         TickType_t delay_time = (g_dart_sensor_mode == DART_SENSOR_MODE_QNA) ? 
-                                pdMS_TO_TICKS(5000) : pdMS_TO_TICKS(1000);
+                                pdMS_TO_TICKS(30000) : pdMS_TO_TICKS(1000);
         vTaskDelay(delay_time);
     }
 }

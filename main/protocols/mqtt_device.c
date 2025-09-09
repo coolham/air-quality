@@ -1,24 +1,16 @@
-/* MQTT (over TCP) Example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-
 #include "sdkconfig.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #include <inttypes.h>
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
-// #include "protocol_examples_common.h"
+
 
 #include "esp_log.h"
 #include "mqtt_client.h"
@@ -33,6 +25,15 @@ static const char *TAG = "mqtt";
 
 static esp_mqtt_client_handle_t s_mqtt_client = NULL;
 static bool s_mqtt_connected = false;
+
+static int64_t s_time_offset = 0; // 单位：秒，真实时间-esp_timer_get_time()
+
+// 在WiFi联网并NTP同步后调用，设置真实时间戳
+void mqtt_device_set_time_offset(time_t real_time)
+{
+    int64_t now = esp_timer_get_time() / 1000000ULL;
+    s_time_offset = (int64_t)real_time - now;
+}
 
 
 static void log_error_if_nonzero(const char *message, int error_code)
@@ -144,7 +145,8 @@ esp_err_t mqtt_device_publish_sensor(const char* sensor_id, const char* sensor_t
     char topic[64];
     snprintf(topic, sizeof(topic), "air-quality/hcho/%s/data", DEVICE_ID);
     char payload[256];
-    uint32_t ts = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+    int64_t now = esp_timer_get_time() / 1000000ULL;
+    uint32_t ts = (uint32_t)(now + s_time_offset);
     snprintf(payload, sizeof(payload),
         "{\"device_id\":\"%s\",\"device_type\":\"%s\",\"sensor_id\":\"%s\",\"sensor_type\":\"%s\",\"timestamp\":%lu,\"data\":{\"formaldehyde\":%.3f,\"ppb\":%.1f}}",
         DEVICE_ID, DEVICE_TYPE, sensor_id, sensor_type, ts, mg, ppb);
