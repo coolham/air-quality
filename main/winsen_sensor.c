@@ -10,7 +10,9 @@
 #include <time.h>
 #include "lvgl_screen_ui.h"
 #include "sys/lock.h"
+
 #include "protocols/mqtt_device.h"
+#include "sensor_filter.h"
 
 #define WINSEN_UART_PORT_NUM      UART_NUM_2
 #define WINSEN_UART_BAUD_RATE    9600
@@ -19,8 +21,8 @@
 #define WINSEN_UART_BUF_SIZE     128
 #define WINSEN_FRAME_SIZE        9       // WINSEN协议帧长度
 
-static const char *TAG = "winsen";
 
+static const char *TAG = "winsen";
 
 // 气体浓度修正系数，默认4，可通过 setter 修改
 static float winsen_ch2o_correction_factor = 1.0f;
@@ -642,40 +644,40 @@ static void winsen_sensor_producer_task(void *pvParameters) {
 
     // 初始化传感器模式 - 发送模式切换命令
     winsen_sensor_init_mode();
-    
-    // 在主动上传模式下，等待传感器启动并开始发送数据
-    // 在问答模式下，准备开始发送查询
+
     if (g_winsen_sensor_mode == WINSEN_SENSOR_MODE_AUTO) {
-        vTaskDelay(pdMS_TO_TICKS(1000)); // 等待传感器开始自动上传
+        vTaskDelay(pdMS_TO_TICKS(1000));
         ESP_LOGI(TAG, "Waiting for sensor to start auto uploading");
     }
     vTaskDelay(pdMS_TO_TICKS(2000));
 
     hcho_sensor_data_t data;
+    hcho_sensor_data_t filtered_data;
+    sensor_filter_t filter_ugm3, filter_ppb;
+    sensor_filter_init(&filter_ugm3);
+    sensor_filter_init(&filter_ppb);
     TickType_t last_read_time = xTaskGetTickCount();
-    
-    while (1) {
-        // 读取传感器数据
-        bool data_valid = winsen_sensor_read(&data);
-        
-        // 如果数据有效，则发送到队列
-        if (data_valid) {
-            xQueueSend(winsen_sensor_queue, &data, portMAX_DELAY);
 
-            // 更新最后成功读取时间
+    while (1) {
+        bool data_valid = winsen_sensor_read(&data);
+        if (data_valid) {
+            sensor_filter_update(&filter_ugm3, data.ch2o_ugm3);
+            sensor_filter_update(&filter_ppb, data.ch2o_ppb);
+            filtered_data = data;
+            filtered_data.ch2o_ugm3 = sensor_filter_get(&filter_ugm3);
+            filtered_data.ch2o_ppb = sensor_filter_get(&filter_ppb);
+            xQueueSend(winsen_sensor_queue, &filtered_data, portMAX_DELAY);
             last_read_time = xTaskGetTickCount();
-        } else {           
-            // 如果长时间没有有效数据，可能需要重新初始化模式
-            if ((xTaskGetTickCount() - last_read_time) > pdMS_TO_TICKS(10000)) {  // 10秒无数据
+        } else {
+            if ((xTaskGetTickCount() - last_read_time) > pdMS_TO_TICKS(10000)) {
                 ESP_LOGW(TAG, "No valid data for 10 seconds, re-initializing sensor mode");
                 winsen_sensor_init_mode();
                 last_read_time = xTaskGetTickCount();
             }
         }
-        
-        // 等待时间根据模式调整
-        TickType_t delay_time = (g_winsen_sensor_mode == WINSEN_SENSOR_MODE_QNA) ? 
-                                pdMS_TO_TICKS(30000) : pdMS_TO_TICKS(1000);
+
+        TickType_t delay_time = (g_winsen_sensor_mode == WINSEN_SENSOR_MODE_QNA) ?
+                                pdMS_TO_TICKS(10000) : pdMS_TO_TICKS(1000);
         vTaskDelay(delay_time);
     }
 }

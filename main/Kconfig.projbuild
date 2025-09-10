@@ -1,5 +1,18 @@
 menu "Air Quality Configuration"
 
+    config DEVICE_ID
+        string "Device ID"
+        default "AirMonitor01"
+        help
+            ID of the device to be used in MQTT topics and identification.
+
+    config DEVICE_TYPE
+        string "Device Type"
+        default "hcho"
+        help
+            Type of the device to be used in MQTT topics and identification.
+
+
     config BROKER_URL
         string "Broker URL"
         default "mqtt://127.0.0.1"

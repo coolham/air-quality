@@ -19,8 +19,8 @@
 
 static const char *TAG = "mqtt";
 
-#define DEVICE_ID "hcho_001"
-#define DEVICE_TYPE "hcho"
+#define DEVICE_ID       CONFIG_DEVICE_ID
+#define DEVICE_TYPE     CONFIG_DEVICE_TYPE
 
 
 static esp_mqtt_client_handle_t s_mqtt_client = NULL;
